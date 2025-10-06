@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -20,6 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import CameraCapture from '@/components/CameraCapture';
+import FoodSearch from '@/components/FoodSearch';
+import { useToast } from '@/hooks/use-toast';
 
 interface Meal {
   id: string;
@@ -35,26 +38,67 @@ const Index = () => {
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [currentStep, setCurrentStep] = useState(0);
   const [userGoal, setUserGoal] = useState('');
-  const [meals, setMeals] = useState<Meal[]>([
-    {
-      id: '1',
-      name: 'Овсянка с ягодами',
-      calories: 320,
-      protein: 12,
-      carbs: 54,
-      fat: 8,
-      time: '08:30',
-    },
-    {
-      id: '2',
-      name: 'Куриная грудка с рисом',
-      calories: 450,
-      protein: 45,
-      carbs: 52,
-      fat: 6,
-      time: '13:15',
-    },
-  ]);
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [addMealMode, setAddMealMode] = useState<'camera' | 'search' | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (!showOnboarding) {
+      loadMeals();
+    }
+  }, [showOnboarding]);
+
+  const loadMeals = async () => {
+    try {
+      const response = await fetch(
+        'https://functions.poehali.dev/72b398eb-ab94-4f41-bf1f-973d8d60a5ea'
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setMeals(data);
+      }
+    } catch (error) {
+      console.error('Failed to load meals:', error);
+    }
+  };
+
+  const saveMeal = async (mealData: {
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  }) => {
+    try {
+      const response = await fetch(
+        'https://functions.poehali.dev/72b398eb-ab94-4f41-bf1f-973d8d60a5ea',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...mealData,
+            meal_time: new Date().toISOString(),
+          }),
+        }
+      );
+
+      if (response.ok) {
+        toast({
+          title: 'Добавлено!',
+          description: `${mealData.name} - ${mealData.calories} kcal`,
+        });
+        loadMeals();
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось сохранить приём пищи',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const totalCalories = meals.reduce((sum, meal) => sum + meal.calories, 0);
   const totalProtein = meals.reduce((sum, meal) => sum + meal.protein, 0);
@@ -258,59 +302,100 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="diary" className="space-y-3 mt-4">
-            {meals.map((meal) => (
-              <Card
-                key={meal.id}
-                className="p-4 hover-scale cursor-pointer animate-fade-in"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h3 className="font-semibold text-lg">{meal.name}</h3>
-                    <p className="text-sm text-muted-foreground">{meal.time}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-primary">
-                      {meal.calories}
-                    </p>
-                    <p className="text-xs text-muted-foreground">kcal</p>
-                  </div>
-                </div>
-                <div className="flex gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Б: <span className="font-medium text-foreground">{meal.protein}г</span>
-                  </span>
-                  <span className="text-muted-foreground">
-                    У: <span className="font-medium text-foreground">{meal.carbs}г</span>
-                  </span>
-                  <span className="text-muted-foreground">
-                    Ж: <span className="font-medium text-foreground">{meal.fat}г</span>
-                  </span>
-                </div>
+            {meals.length === 0 ? (
+              <Card className="p-8 text-center">
+                <Icon name="Utensils" size={48} className="mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground mb-2">Приёмы пищи не добавлены</p>
+                <p className="text-sm text-muted-foreground">
+                  Добавьте первое блюдо с помощью камеры или поиска
+                </p>
               </Card>
-            ))}
+            ) : (
+              meals.map((meal) => (
+                <Card
+                  key={meal.id}
+                  className="p-4 hover-scale cursor-pointer animate-fade-in"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h3 className="font-semibold text-lg">{meal.name}</h3>
+                      <p className="text-sm text-muted-foreground">{meal.time}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-primary">
+                        {meal.calories}
+                      </p>
+                      <p className="text-xs text-muted-foreground">kcal</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-4 text-sm">
+                    <span className="text-muted-foreground">
+                      Б: <span className="font-medium text-foreground">{meal.protein}г</span>
+                    </span>
+                    <span className="text-muted-foreground">
+                      У: <span className="font-medium text-foreground">{meal.carbs}г</span>
+                    </span>
+                    <span className="text-muted-foreground">
+                      Ж: <span className="font-medium text-foreground">{meal.fat}г</span>
+                    </span>
+                  </div>
+                </Card>
+              ))
+            )}
 
-            <Dialog>
+            <Dialog open={addMealMode !== null} onOpenChange={(open) => !open && setAddMealMode(null)}>
               <DialogTrigger asChild>
                 <Button className="w-full h-14 text-base" size="lg">
                   <Icon name="Plus" className="mr-2" size={20} />
                   Добавить приём пищи
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>Новый приём пищи</DialogTitle>
+                  <DialogTitle>
+                    {addMealMode === null && 'Новый приём пищи'}
+                    {addMealMode === 'camera' && 'Анализ фото'}
+                    {addMealMode === 'search' && 'Поиск продукта'}
+                  </DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button variant="outline" className="h-24 flex-col gap-2">
-                      <Icon name="Camera" size={28} />
-                      <span className="text-sm">Сканировать</span>
-                    </Button>
-                    <Button variant="outline" className="h-24 flex-col gap-2">
-                      <Icon name="Utensils" size={28} />
-                      <span className="text-sm">Из списка</span>
-                    </Button>
-                  </div>
+                <div className="pt-4">
+                  {addMealMode === null && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button
+                        variant="outline"
+                        className="h-24 flex-col gap-2"
+                        onClick={() => setAddMealMode('camera')}
+                      >
+                        <Icon name="Camera" size={28} />
+                        <span className="text-sm">Сканировать</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-24 flex-col gap-2"
+                        onClick={() => setAddMealMode('search')}
+                      >
+                        <Icon name="Utensils" size={28} />
+                        <span className="text-sm">Из списка</span>
+                      </Button>
+                    </div>
+                  )}
+                  {addMealMode === 'camera' && (
+                    <CameraCapture
+                      onFoodDetected={(food) => {
+                        saveMeal(food);
+                        setAddMealMode(null);
+                      }}
+                      onClose={() => setAddMealMode(null)}
+                    />
+                  )}
+                  {addMealMode === 'search' && (
+                    <FoodSearch
+                      onFoodSelect={(food) => {
+                        saveMeal(food);
+                        setAddMealMode(null);
+                      }}
+                    />
+                  )}
                 </div>
               </DialogContent>
             </Dialog>
